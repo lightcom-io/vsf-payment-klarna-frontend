@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "main": "index.ts",
   "license": "MIT",
+  "author": [
+    "Robin Nilsson <robin@robins.nu>",
+    "Max Malm <benjick@dumfan.net>",
+    "Salem Sallnäs <salem@lightcom.io>"
+  ],
   "dependencies": {
     "paypal-rest-sdk-kodbruket-fixed": "^1.8.1",
     "postscribe": "^2.0.8",
