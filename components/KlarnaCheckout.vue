@@ -34,9 +34,28 @@ export default {
   },
   beforeMount () {
     this.$bus.$on('klarna-update-order', this.configureUpdateOrder)
+
+    // Todo: refactor
+    this.$bus.$on('klarna-order-loaded', () => {
+      setTimeout(async () => {
+        const order = await this.$store.dispatch('kco/fetchOrder', this.checkout.orderId)
+        this.onKcoAddressChange({
+          totalSegments: this.totals.total_segments,
+          shippingAddress: order.shipping_address
+        })
+      }, 2000)
+    })
+
+    this.$bus.$on('klarna-created-order', ({result}) => this.syncShippingOption(result.selected_shipping_option.id))
+    this.$bus.$on('klarna-event-shipping_option_change', (data) => this.syncShippingOption(data.id))
+    this.$bus.$on('klarna-event-shipping_address_change', () => this.configureUpdateOrder())
   },
   beforeDestroy () {
     this.$bus.$off('klarna-update-order')
+    this.$bus.$off('klarna-order-loaded')
+    this.$bus.$off('klarna-created-order')
+    this.$bus.$off('klarna-event-shipping_option_change')
+    this.$bus.$off('klarna-event-shipping_address_change')
   },
   computed: {
     ...mapGetters({
@@ -55,7 +74,8 @@ export default {
     },
     totals (newValue, oldValue) {
       if (oldValue) {
-        if (newValue.qty !== oldValue.qty || newValue.base_grand_total !== oldValue.base_grand_total) {
+        let shippingMethodChanged = newValue.base_shipping_amount !== oldValue.base_shipping_amount
+        if (!shippingMethodChanged && (newValue.items_qty !== oldValue.items_qty || newValue.base_grand_total !== oldValue.base_grand_total)) {
           const storeView = currentStoreView()
           const countryId = this.$store.state.checkout.shippingDetails.country ? this.$store.state.checkout.shippingDetails.country : storeView.tax.defaultCountry
           this.$store.dispatch('cart/syncShippingMethods', {
@@ -67,6 +87,23 @@ export default {
     }
   },
   methods: {
+    syncShippingOption (shippingMethod) {
+      localStorage.setItem('kco/shipping_method', shippingMethod)
+
+      if (!shippingMethod) return
+      let parts = shippingMethod.split('_')
+      let carrier = parts.shift()
+      let method = parts.join('_') || carrier
+
+      let methodsData = {
+        country: this.order.purchase_country,
+        carrier_code: carrier,
+        method_code: method,
+        payment_method: null
+      }
+
+      this.$store.dispatch('cart/syncTotals', { forceServerSync: true, methodsData })
+    },
     setupKlarnaListeners () {
       const events = {}
       klarnaEvents.forEach(event => {
@@ -75,28 +112,13 @@ export default {
         }
       })
       callApi(api => api.on(events))
-      this.$bus.$on('klarna-event-shipping_option_change', (data) => {
-        /* Watch shipping option event from Klarna */
-        localStorage.setItem('shipping_method', data.id)
-      })
-
-      // Todo: refactor
-      this.$bus.$on('klarna-order-loaded', () => {
-        setTimeout(async () => {
-          const order = await this.$store.dispatch('kco/fetchOrder', this.checkout.orderId)
-          this.onKcoAddressChange({
-            totalSegments: this.totals.total_segments,
-            shippingAddress: order.shipping_address
-          })
-        }, 2000)
-      })
     },
     async upsertOrder () {
       await this.$store.dispatch('kco/createOrder')
       const { default: postscribe } = await import('postscribe')
       postscribe('#klarna-render-checkout', this.checkout.snippet)
       await Promise.resolve()
-      this.setupKlarnaListeners()
+      setTimeout(() => this.setupKlarnaListeners(), 500)
     },
     async configureUpdateOrder () {
       if (!this.checkout.order || !this.checkout.order.order_id) {

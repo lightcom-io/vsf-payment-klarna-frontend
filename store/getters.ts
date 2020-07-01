@@ -181,23 +181,24 @@ export const getters: GetterTree<KlarnaState, RootState> = {
         tax_rate: shippingTaxRate ? shippingTaxRate * 10000 : 0
       })
     } else {
-      const selectedShippingMethodId = localStorage.getItem('shipping_method')
-
+      let selectedOption
+      const selectedShippingMethodId = localStorage.getItem('kco/shipping_method')
       if (selectedShippingMethodId) {
-        const selectedOption = shippingMethods.find(method => getFullMethodCode(method) === selectedShippingMethodId)
+        selectedOption = shippingMethods.find(method => getFullMethodCode(method) === selectedShippingMethodId)
+      }
+      if (!selectedOption && shippingMethods.length) {
+        selectedOption = shippingMethods[0]
+      }
 
-        if (selectedOption) {
-          const option: KlarnaShippingOption = makeKlarnaShippingOption(selectedOption)
-          const orderLine: KlarnaShippingOrderLine = makeKlarnaShippingRow(option)
+      if (selectedOption) {
+        const option: KlarnaShippingOption = makeKlarnaShippingOption(selectedOption)
+        const orderLine: KlarnaShippingOrderLine = makeKlarnaShippingRow(option)
 
-          checkoutOrder.order_lines.push(orderLine)
-          checkoutOrder.selected_shipping_option = option
+        checkoutOrder.order_lines.push(orderLine)
+        checkoutOrder.selected_shipping_option = option
 
-          checkoutOrder.order_lines.reduce((sum, line) => sum + line.total_amount, 0)
-
-          checkoutOrder.order_amount = sumByKey('total_amount', checkoutOrder.order_lines)
-          checkoutOrder.order_tax_amount = sumByKey('total_tax_amount', checkoutOrder.order_lines)
-        }
+        checkoutOrder.order_amount = sumByKey('total_amount', checkoutOrder.order_lines)
+        checkoutOrder.order_tax_amount = sumByKey('total_tax_amount', checkoutOrder.order_lines)
       }
     }
 
