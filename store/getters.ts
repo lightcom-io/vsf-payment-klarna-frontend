@@ -54,8 +54,11 @@ const mapProductToKlarna = (product) => {
   const vsfProduct = product.product
 
   // Total amount including tax and discounts
-  const total_amount = formatRawAmount(product.row_total) - formatRawAmount(product.discount_amount) + formatRawAmount(product.tax_amount)
-  const total_discount_amount = formatRawAmount(product.row_total_incl_tax) - total_amount
+  // const total_amount = formatRawAmount(product.row_total) - formatRawAmount(product.discount_amount) + formatRawAmount(product.tax_amount)
+  // const total_discount_amount = formatRawAmount(product.row_total_incl_tax) - total_amount
+  // const total_tax_amount = formatRawAmount(product.tax_amount)
+  const total_amount = formatRawAmount(product.row_total_incl_tax) - formatRawAmount(product.discount_amount)
+  const total_discount_amount = formatRawAmount(product.discount_amount)
   const total_tax_amount = formatRawAmount(product.tax_amount)
 
   const klarnaProduct: any = {
