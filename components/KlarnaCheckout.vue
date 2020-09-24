@@ -14,6 +14,7 @@
 <script>
 import { mapGetters } from 'vuex'
 import { callApi } from '../helpers'
+import { alpha3toalpha2 } from '../utils/iso3166'
 import { currentStoreView } from '@vue-storefront/core/lib/multistore'
 import LoadingSpinner from 'theme/components/theme/blocks/AsyncSidebar/LoadingSpinner.vue'
 import { isServer } from '@vue-storefront/core/helpers'
@@ -29,40 +30,33 @@ export default {
   },
   async mounted () {
     if (!isServer) {
-      this.upsertOrder()
+      this.initCheckout()
     }
   },
   beforeMount () {
-    this.$bus.$on('klarna-update-order', this.configureUpdateOrder)
-
-    // Todo: refactor
-    this.$bus.$on('klarna-order-loaded', () => {
-      setTimeout(async () => {
-        const order = await this.$store.dispatch('kco/fetchOrder', this.checkout.orderId)
-        this.onKcoAddressChange({
-          totalSegments: this.totals.total_segments,
-          shippingAddress: order.shipping_address
-        })
-      }, 2000)
-    })
-
+    this.$bus.$on('klarna-update-order', this.updateOrder)
     this.$bus.$on('klarna-created-order', ({result}) => this.syncShippingOption(result.selected_shipping_option.id))
     this.$bus.$on('klarna-event-shipping_option_change', (data) => this.syncShippingOption(data.id))
-    this.$bus.$on('klarna-event-shipping_address_change', () => this.configureUpdateOrder())
+    this.$bus.$on('klarna-event-change', async (payload) => {
+      if ('country' in payload && alpha3toalpha2(payload.country) !== this.shippingDetails.country) {
+        this.$set(this.$store.state.checkout.shippingDetails, 'country', alpha3toalpha2(payload.country))
+        this.updateOrder()
+      }
+    })
   },
   beforeDestroy () {
     this.$bus.$off('klarna-update-order')
-    this.$bus.$off('klarna-order-loaded')
     this.$bus.$off('klarna-created-order')
     this.$bus.$off('klarna-event-shipping_option_change')
-    this.$bus.$off('klarna-event-shipping_address_change')
+    this.$bus.$off('klarna-event-change')
   },
   computed: {
     ...mapGetters({
+      shippingDetails: 'checkout/getShippingDetails',
+      paymentDetails: 'checkout/getPaymentDetails',
       order: 'kco/order',
       checkout: 'kco/checkout',
       totals: 'kco/platformTotals',
-      hasTotals: 'kco/hasTotals',
       coupon: 'kco/coupon'
     })
   },
@@ -74,13 +68,10 @@ export default {
     },
     totals (newValue, oldValue) {
       if (oldValue) {
+        // If shippingMethodChanged, that means it was changed in Klarna, so ignore the change
         let shippingMethodChanged = newValue.base_shipping_amount !== oldValue.base_shipping_amount
         if (!shippingMethodChanged && (newValue.items_qty !== oldValue.items_qty || newValue.base_grand_total !== oldValue.base_grand_total)) {
-          const storeView = currentStoreView()
-          const countryId = this.$store.state.checkout.shippingDetails.country ? this.$store.state.checkout.shippingDetails.country : storeView.tax.defaultCountry
-          this.$store.dispatch('cart/syncShippingMethods', {
-            country_id: countryId
-          })
+          // this.$store.dispatch('cart/syncShippingMethods', {}) //  Not sure what this was trying to do...
           this.$bus.$emit('klarna-update-order')
         }
       }
@@ -96,7 +87,7 @@ export default {
       let method = parts.join('_') || carrier
 
       let methodsData = {
-        country: this.order.purchase_country,
+        country: this.shippingDetails.country,
         carrier_code: carrier,
         method_code: method,
         payment_method: null
@@ -113,36 +104,29 @@ export default {
       })
       callApi(api => api.on(events))
     },
-    async upsertOrder () {
-      await this.$store.dispatch('kco/createOrder')
+    async initCheckout (mount = false) {
+      await this.createOrUpdateOrder()
       const { default: postscribe } = await import('postscribe')
       postscribe('#klarna-render-checkout', this.checkout.snippet)
       await Promise.resolve()
-      setTimeout(() => this.setupKlarnaListeners(), 500)
+      // $nextTick should do it, but if issues arise with events not being triggered, this might have to changed to a timeout.
+      this.$nextTick(() => this.setupKlarnaListeners())
     },
-    async configureUpdateOrder () {
-      if (!this.checkout.order || !this.checkout.order.order_id) {
-        return
+    async createOrUpdateOrder () {
+      await this.$store.dispatch('kco/createOrder')
+    },
+    async updateOrder () {
+      if (this.checkout.order?.order_id) {
+        await this.suspendCheckout()
+        await this.createOrUpdateOrder()
+        await this.resumeCheckout()
       }
-      await this.suspendCheckout()
-      await this.upsertOrder()
-      await this.resumeCheckout()
     },
     suspendCheckout () {
       return callApi(api => api.suspend())
     },
     resumeCheckout () {
       return callApi(api => api.resume())
-    },
-    onKcoAddressChange (orderData) {
-      if (orderData.shippingAddress.postal_code) {
-        this.$bus.$emit('kcoAddressChange', orderData)
-      }
-      return callApi(api => api.on({
-        'billing_address_change': async (data) => {
-          this.$bus.$emit('klarna-order-loaded')
-        }
-      }))
     }
   }
 }
