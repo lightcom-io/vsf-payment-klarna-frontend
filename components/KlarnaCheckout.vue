@@ -23,6 +23,8 @@ const klarnaEvents = [
   'load', 'customer', 'change', 'billing_address_change', 'shipping_address_change', 'shipping_option_change', 'order_total_change', 'can_not_complete_order', 'network_error'
 ]
 
+const cleanZipcode = (z) => z.replace(/\W/g, '')
+
 export default {
   name: 'KlarnaCheckout',
   components: {
@@ -35,14 +37,9 @@ export default {
   },
   beforeMount () {
     this.$bus.$on('klarna-update-order', this.updateOrder)
-    this.$bus.$on('klarna-created-order', ({result}) => this.syncShippingOption(result.selected_shipping_option.id))
-    this.$bus.$on('klarna-event-shipping_option_change', (data) => this.syncShippingOption(data.id))
-    this.$bus.$on('klarna-event-change', async (payload) => {
-      if ('country' in payload && alpha3toalpha2(payload.country) !== this.shippingDetails.country) {
-        this.$set(this.$store.state.checkout.shippingDetails, 'country', alpha3toalpha2(payload.country))
-        this.updateOrder()
-      }
-    })
+    this.$bus.$on('klarna-created-order', ({ result }) => this.syncShippingOption(result.selected_shipping_option.id))
+    this.$bus.$on('klarna-event-shipping_option_change', ({ id }) => this.syncShippingOption(id))
+    this.$bus.$on('klarna-event-change', this.syncShippingDetails)
   },
   beforeDestroy () {
     this.$bus.$off('klarna-update-order')
@@ -78,6 +75,20 @@ export default {
     }
   },
   methods: {
+    syncShippingDetails (data) {
+      let update = false
+      if ('country' in data && alpha3toalpha2(data.country) !== this.shippingDetails.country) {
+        this.$set(this.$store.state.checkout.shippingDetails, 'country', alpha3toalpha2(data.country))
+        update = true
+      }
+
+      if ('postal_code' in data && cleanZipcode(data.postal_code) !== cleanZipcode(this.shippingDetails.zipCode)) {
+        this.$set(this.$store.state.checkout.shippingDetails, 'zipCode', data.postal_code)
+        update = true
+      }
+
+      update && this.updateOrder()
+    },
     syncShippingOption (shippingMethod) {
       localStorage.setItem('kco/shipping_method', shippingMethod)
 
