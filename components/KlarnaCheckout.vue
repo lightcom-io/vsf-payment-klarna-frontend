@@ -40,12 +40,14 @@ export default {
     this.$bus.$on('klarna-created-order', ({ result }) => this.syncShippingOption(result.selected_shipping_option.id))
     this.$bus.$on('klarna-event-shipping_option_change', ({ id }) => this.syncShippingOption(id))
     this.$bus.$on('klarna-event-change', this.syncShippingDetails)
+    this.$bus.$on('klarna-event-customer', this.syncShippingDetails)
   },
   beforeDestroy () {
     this.$bus.$off('klarna-update-order')
     this.$bus.$off('klarna-created-order')
     this.$bus.$off('klarna-event-shipping_option_change')
     this.$bus.$off('klarna-event-change')
+    this.$bus.$off('klarna-event-customer')
   },
   computed: {
     ...mapGetters({
@@ -85,6 +87,17 @@ export default {
       if ('postal_code' in data && cleanZipcode(data.postal_code) !== cleanZipcode(this.shippingDetails.zipCode)) {
         this.$set(this.$store.state.checkout.shippingDetails, 'zipCode', data.postal_code)
         update = true
+      }
+
+      if ('type' in data) {
+        // This is for e.g. Owebia, to know if the customer is a company, to generate correct shiping methods
+        if (data.type === 'person' && this.shippingDetails.company) {
+          this.$set(this.$store.state.checkout.shippingDetails, 'company', '')
+          update = true
+        } else if (data.type === 'organization' && !this.shippingDetails.company) {
+          this.$set(this.$store.state.checkout.shippingDetails, 'company', 'yes')
+          update = true
+        }
       }
 
       update && this.updateOrder()
