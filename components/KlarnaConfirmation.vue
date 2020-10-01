@@ -16,6 +16,13 @@ import LoadingSpinner from '../components/LoadingSpinner.vue'
 
 export default {
   name: 'KlarnaConfirmation',
+  props: {
+    // Used to .sync order to parent component
+    order: {
+      type: Object,
+      default: null
+    }
+  },
   computed: {
     ...mapGetters({
       confirmation: 'kco/confirmation'
@@ -32,7 +39,8 @@ export default {
         return
       }
       this.$bus.$emit('kco-order-confirmation', { orderId: sid })
-      await this.$store.dispatch('kco/confirmation', { sid })
+      let order = await this.$store.dispatch('kco/confirmation', { sid })
+      this.$emit('update:order', order)
       this.$store.dispatch('cart/clear', { sync: false })
       const { default: postscribe } = await import('postscribe')
       postscribe('#klarna-render-confirmation', this.confirmation.snippet)
