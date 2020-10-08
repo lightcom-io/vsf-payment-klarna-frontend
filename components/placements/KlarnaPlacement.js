@@ -42,7 +42,9 @@ export default {
     Object.assign(data, {
       key: this.key,
       locale: this.locale,
-      inline: this.inline
+      theme: this.theme,
+      inline: this.inline,
+      preload: this.preload
     })
 
     if (this.amount) {
