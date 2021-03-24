@@ -71,7 +71,7 @@ const mapProductToKlarna = (product) => {
     total_tax_amount
   }
   if (vsfProduct) {
-    klarnaProduct.image_url = getThumbnailPath(vsfProduct.image, 600, 600) || ''
+    klarnaProduct.image_url = getThumbnailPath(vsfProduct.image, 600, 600) || config.klarna.fallbackImage || 'no-image'
     klarnaProduct.reference = vsfProduct.sku
     if (config.klarna.productBaseUrl) {
       klarnaProduct.product_url = config.klarna.productBaseUrl + getProductUrl(vsfProduct)
